@@ -119,6 +119,45 @@ class Place
 #########************************Geolocation Queries ************************########
 #3
 
+	def self.create_indexes 
+		collection.indexes.create_one({"geometry.geolocation"=>Mongo::Index::GEO2DSPHERE})
+		#create_indexes must make sure the 2dsphere index is in place for the geometry.geolocation 
+		#property (Hint: Mongo::Index::GEO2DSPHERE)
+	end
+
+	def self.remove_indexes
+		collection.indexes.drop_one("geometry.geolocation_2dsphere")
+		#collection.indexes.map {|r| collection.indexes.drop_one(r[:name])}
+	end
+
+
+	#accept an input parameter of type Point (created earlier) 
+    def self.near(point, max_meters=nil)
+		query={:$geometry=>point.to_hash}
+		query[:$maxDistance]= max_meters unless max_meters.nil?
+		  collection.find(
+			{ "geometry.geolocation"=>
+			  { :$near =>
+			       query
+			  }
+			}
+		  )
+	end
+
+
+#Create an instance method (also) called near that wraps the class method you just ﬁnished. 
+#accept an optional parameter that sets a maximum distance threshold in meters 
+	def near(max_meters=nil)
+
+		if max_meters.nil?
+			self.class.to_places(self.class.near(location))
+		else
+			self.class.to_places(self.class.near(location, max_meters))
+		end
+    	
+	end
+
+
 #########***************************  PHOTO *****************************########
 #9
 
