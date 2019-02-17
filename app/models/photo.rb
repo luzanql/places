@@ -1,7 +1,7 @@
 require 'exifr/jpeg'
 
 class Photo
-
+#include Place
 	attr_accessor :id, :location, :place
 	attr_writer  :contents
 
@@ -24,7 +24,7 @@ class Photo
 		end
 
 		if params[:metadata] and params[:metadata][:place]
-			@place =params[:metadata][:place]
+			@place = params[:metadata][:place]
 		else
 			@place = nil;
 		end
@@ -36,9 +36,7 @@ class Photo
 
  	# creates getter method for place
  	def place        
-    	#Place.find(@place)
-    	!@place.nil? ? Place.find(@place.id) : nil
-
+    	!@place.nil? ? Place.find( @place.to_s) : nil
  	end
 
  	# creates setter method for age
@@ -56,10 +54,15 @@ class Photo
  		description = {}	
  		description[:metadata] = {}   
  		if self.persisted? then
- 			description[:metadata][:location] = self.location.to_hash if !(self.location.nil?)
- 			description[:metadata][:place] = self.place unless self.place.nil?
+ 			description[:metadata][:location] = self.location.to_hash unless self.location.nil?
+ 			description[:metadata][:place] = BSON::ObjectId(self.place.id)  unless self.place.nil?
+ 			#self.class.find(@id.to_s).update_one(:$set=>description)
+ 			#id = self.class.mongo_client.database.fs.insert_one(grid_file)
  			self.class.mongo_client.database.fs.find(:_id=>BSON::ObjectId(@id)).
  			update_one(:$set=>description)
+ 			#id = self.class.mongo_client.database.fs.find(:_id =>@id).update_one(:$set=>description)
+        	#@id = id.to_s
+        	#@id
  		else	
  		geoloc=EXIFR::JPEG.new(@contents).gps
  		
