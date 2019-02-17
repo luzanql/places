@@ -2,9 +2,8 @@ require 'exifr/jpeg'
 
 class Photo
 
-	attr_accessor :id, :location  
+	attr_accessor :id, :location, :place
 	attr_writer  :contents
-
 
 	def self.mongo_client
     	@@db ||= Mongoid::Clients.default
@@ -17,12 +16,17 @@ class Photo
 	def initialize (params={})
 		#:_id=>BSON::ObjectId.from_string(id.to_s)
 
-
 		@id = params[:_id].nil? ? params[:id] : params[:_id].to_s
 		if params[:metadata] and params[:metadata][:location]
 			@location = Point.new(params[:metadata][:location])
 		else
 			@location = nil;
+		end
+
+		if params[:metadata] and params[:metadata][:place]
+			@place =params[:metadata][:place]
+		else
+			@place = nil;
 		end
 	end
 
@@ -30,22 +34,38 @@ class Photo
     	!@id.nil?
  	end
 
+ 	# creates getter method for place
+ 	def place        
+    	#Place.find(@place)
+    	!@place.nil? ? Place.find(@place.id) : nil
+
+ 	end
+
+ 	# creates setter method for age
+ 	def place=(value)
+	    @place = value                                if value.is_a? BSON::ObjectId
+	    @place = BSON::ObjectId.from_string(value)    if value.is_a? String
+	    @place = BSON::ObjectId.from_string(value.id) if value.is_a? Place 
+  	end
+
  # check whether the instance is already persisted and do nothing
 
  	 # check whether the instance is already persisted and do nothing
 
  	def save
+ 		description = {}	
+ 		description[:metadata] = {}   
  		if self.persisted? then
- 			#self.class.mongo_client.database.fs.find(:_id=> BSON::ObjectId.from_string(@id))
- 			#.update_one({"location"=>  @location.to_hash})
+ 			description[:metadata][:location] = self.location.to_hash if !(self.location.nil?)
+ 			description[:metadata][:place] = self.place unless self.place.nil?
  			self.class.mongo_client.database.fs.find(:_id=>BSON::ObjectId(@id)).
- 			update_one(:$set=>{'metadata.location'=>self.location.to_hash})
+ 			update_one(:$set=>description)
  		else	
  		geoloc=EXIFR::JPEG.new(@contents).gps
  		
- 		description = {}	
+ 		#description = {}	
  		description[:content_type]="image/jpeg"  
- 		description[:metadata] = {}   
+ 		#description[:metadata] = {}   
  		description[:metadata][:location] =  (Point.new(:lng=>geoloc.longitude, :lat=>geoloc.latitude)).to_hash
  		@location=Point.new(:lng=>geoloc.longitude, :lat=>geoloc.latitude)
  		grid_file = Mongo::Grid::File.new(@contents.read, description)
