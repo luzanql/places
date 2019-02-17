@@ -1,4 +1,5 @@
 class Place
+	include ActiveModel::Model
 
 	attr_accessor :id, :formatted_address, :location, :address_components
 
@@ -17,6 +18,11 @@ class Place
 	  			  Point.new(params[:geometry][:geolocation])
 
 	end
+
+	def persisted? 
+		!@id.nil? 
+	end
+
 
 	def self.mongo_client
 		Mongoid::Clients.default
@@ -161,15 +167,34 @@ class Place
 
 #########*************************RELATIONSHIP*************************########
 #5
+def photos(offset=0, limit=0)
+    self.class.mongo_client.database.fs.find(
+      "metadata.place": BSON::ObjectId.from_string(@id)
+    ).map { |photo|
+      Photo.new(photo)
+    }
+end 
 
-#########*************************DATA POPULATION*************************########
-#7
+=begin
 
-#########*************************SERVER PHOTO IMAGES*************************########
-#3
+def photos(offset=0, limit=nil)
+    photos = []
 
-#########**********************Show Places and Photo Images*******************########
-#5
+    if !limit.nil?
+      Photo.find_photos_for_place(@id).aggregate([
+                                         {:$skip=>offset},
+                                         {:$limit=> limit}
+                                     ]).each {|doc| photos << Photo.new(doc)}
+    else
+      Photo.find_photos_for_place(@id).aggregate([
+                                         {:$skip=> offset}
+                                     ]).each {|doc| photos << Photo.new(doc)}
+    end
+
+    photos
+  end
+
+=end
 
 
 end

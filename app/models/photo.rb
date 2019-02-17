@@ -7,12 +7,9 @@ class Photo
 
 	def self.mongo_client
     	@@db ||= Mongoid::Clients.default
-    	#GridfsLoader.mongo_client
  	end
 
 	#########***************************  PHOTO *****************************########
-# Add an initialize method in the Photo class that can be used to initialize the instance attributes of 
-# Photo from the hash returned from queries like mongo_client.database.fs.fin
 	def initialize (params={})
 		#:_id=>BSON::ObjectId.from_string(id.to_s)
 
@@ -56,13 +53,8 @@ class Photo
  		if self.persisted? then
  			description[:metadata][:location] = self.location.to_hash unless self.location.nil?
  			description[:metadata][:place] = BSON::ObjectId(self.place.id)  unless self.place.nil?
- 			#self.class.find(@id.to_s).update_one(:$set=>description)
- 			#id = self.class.mongo_client.database.fs.insert_one(grid_file)
  			self.class.mongo_client.database.fs.find(:_id=>BSON::ObjectId(@id)).
  			update_one(:$set=>description)
- 			#id = self.class.mongo_client.database.fs.find(:_id =>@id).update_one(:$set=>description)
-        	#@id = id.to_s
-        	#@id
  		else	
  		geoloc=EXIFR::JPEG.new(@contents).gps
  		
@@ -71,7 +63,9 @@ class Photo
  		#description[:metadata] = {}   
  		description[:metadata][:location] =  (Point.new(:lng=>geoloc.longitude, :lat=>geoloc.latitude)).to_hash
  		@location=Point.new(:lng=>geoloc.longitude, :lat=>geoloc.latitude)
+ 		@contents.rewind
  		grid_file = Mongo::Grid::File.new(@contents.read, description)
+
 		id = self.class.mongo_client.database.fs.insert_one(grid_file)
         @id = id.to_s
         @id
@@ -83,19 +77,16 @@ class Photo
  		files=[]
 	    mongo_client.database.fs.find.skip(offset).limit(limit).each do |r| 
         files << Photo.new(r) end
-  		#result.each do |lugar|lugares << Place.new(lugar) end
   		return files
  	end
 
 
  	def self.find(id)
- 		#id = {_id:BSON::ObjectId.from_string(id)}
- 		# pp Photo.mongo_client.database.fs.find(:_id=>BSON::ObjectId.from_string(id)).first 
  		f= mongo_client.database.fs.find(:_id=>BSON::ObjectId.from_string(id.to_s)).first
         return f.nil? ? nil : Photo.new(f)
  	end
 
- 	# Create a custom getter for contents that will return the data contents of the ﬁle. This method must: 
+ 	# Create a custom getter for contents that will return the data contents of the ﬁle.
  	def contents
  		stored_file = Photo.mongo_client.database.fs.find_one(_id: BSON::ObjectId.from_string(@id))
 		foto = Photo.find(@id)
@@ -104,7 +95,7 @@ class Photo
 		stored_file.chunks.reduce([]) { |x, chunk|
 			contents << chunk.data.data
 		}
-		nf = File.open("./db/output.jpg", "wb") { |file| file.write(@contents) }
+		nf = File.open("./db/ place_id =.jpg", "wb") { |file| file.write(@contents) }
 		contents
  	end
 
@@ -117,7 +108,7 @@ class Photo
 
 
   	################################## RELATIONSHIPS ##########################################
-  	
+=begin
 	def find_nearest_place_id(max_distance)
 		id = near_places = Place.near(@location, max_distance).aggregate([
 			{:$project=>{'_id': 1}},
@@ -131,6 +122,20 @@ class Photo
 		end
 
 	end
+=end
+	def find_nearest_place_id(max_meters)
+	    Place.collection.find(
+	      {'geometry.geolocation': 
+	       {'$near': @location.to_hash}
+	      }).limit(1).projection({:_id=>1}).first[:_id]
+  	end
 
+	#returns a collection view of photo documents that have the foreign key reference
+	def self.find_photos_for_place(place_id)
+		place_id =  BSON::ObjectId.from_string(place_id.to_s)
+	    mongo_client.database.fs.find("metadata.place" => place_id)#.each do |r| 
+	end
+
+	
 
 end
