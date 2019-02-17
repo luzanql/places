@@ -32,17 +32,18 @@ class Photo
 
  # check whether the instance is already persisted and do nothing
 
- 	def save
- 		#self.class.persisted?
+ 	 # check whether the instance is already persisted and do nothing
 
- 		#se the exifr gem to extract geolocation information from the jpeg image.
- 		if !self.persisted? then
- 		
+ 	def save
+ 		if self.persisted? then
+ 			#self.class.mongo_client.database.fs.find(:_id=> BSON::ObjectId.from_string(@id))
+ 			#.update_one({"location"=>  @location.to_hash})
+ 			self.class.mongo_client.database.fs.find(:_id=>BSON::ObjectId(@id)).
+ 			update_one(:$set=>{'metadata.location'=>self.location.to_hash})
+ 		else	
  		geoloc=EXIFR::JPEG.new(@contents).gps
  		
- 		description = {}
- 		#description[:metadata] = {:location =>  Point.new(:lng=>geoloc.longitude, :lat=>geoloc.latitude)}
- 		#Point.new(:lng=>gps.longitude, :lat=>gps.latitude)
+ 		description = {}	
  		description[:content_type]="image/jpeg"  
  		description[:metadata] = {}   
  		description[:metadata][:location] =  (Point.new(:lng=>geoloc.longitude, :lat=>geoloc.latitude)).to_hash
@@ -54,17 +55,14 @@ class Photo
  		end
  	end
 
+
  	def self.all (offset=0, limit=0)
  		files=[]
-     #   result = mongo_client.database.fs.find.skip(offset).limit(limit)
-	#	result.each do |foto |files << Photo.new(foto) end
-
 	    mongo_client.database.fs.find.skip(offset).limit(limit).each do |r| 
         files << Photo.new(r) end
   		#result.each do |lugar|lugares << Place.new(lugar) end
   		return files
  	end
-
 
 
  	def self.find(id)
@@ -73,6 +71,43 @@ class Photo
  		f= mongo_client.database.fs.find(:_id=>BSON::ObjectId.from_string(id.to_s)).first
         return f.nil? ? nil : Photo.new(f)
  	end
+
+ 	# Create a custom getter for contents that will return the data contents of the ﬁle. This method must: 
+ 	def contents
+ 		stored_file = Photo.mongo_client.database.fs.find_one(_id: BSON::ObjectId.from_string(@id))
+		foto = Photo.find(@id)
+		contents = ""
+
+		stored_file.chunks.reduce([]) { |x, chunk|
+			contents << chunk.data.data
+		}
+		nf = File.open("./db/output.jpg", "wb") { |file| file.write(@contents) }
+		contents
+ 	end
+
+ 	#Add an instance method called destroy to the Photo class that will delete the ﬁle and contents
+ 	# associated with the ID of the object instance. This method must:
+ 	def destroy
+ 		#Photo.all.each {|photo| photo.destroy }
+    	self.class.mongo_client.database.fs.find(:_id=>BSON::ObjectId.from_string(self.id)).delete_one
+  	end
+
+
+  	################################## RELATIONSHIPS ##########################################
+  	
+	def find_nearest_place_id(max_distance)
+		id = near_places = Place.near(@location, max_distance).aggregate([
+			{:$project=>{'_id': 1}},
+			{:$limit=> 1}
+		]).to_a.map {|r|  r[:_id]}
+
+		if id.nil?
+			nil
+		else
+			id.first
+		end
+
+	end
 
 
 end
